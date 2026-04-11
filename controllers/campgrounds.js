@@ -92,3 +92,39 @@ exports.getCampground = async (req, res, next) => {
         res.status(400).json({success: false});
     }
 };
+
+// @desc    Create new campground
+// @route   POST /api/v1/campgrounds
+// @access  Private
+exports.createCampground = async (req, res, next) => {
+    try {
+        const { name, address, tel, picture } = req.body;
+
+        // Check that every required field is not empty
+        const missing = [];
+        if (!name) missing.push('name');
+        if (!address) missing.push('address');
+        if (!tel) missing.push('tel');
+        if (!picture) missing.push('picture');
+
+        if (missing.length > 0) {
+            return res.status(400).json({
+                success: false,
+                message: `Missing required fields: ${missing.join(', ')}`
+            });
+        }
+
+        const campground = await Campground.create(req.body);
+        res.status(201).json({ success: true, data: campground });
+    } catch (err) {
+        // If this campground name already exists
+        if (err.code === 11000) {
+            return res.status(400).json({ success: false, message: `Campground name '${err.keyValue?.name}' already exists` });
+        }
+        if (err.name === 'ValidationError') {
+            const messages = Object.values(err.errors).map(e => e.message);
+            return res.status(400).json({ success: false, message: messages.join(', ') });
+        }
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
