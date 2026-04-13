@@ -128,3 +128,21 @@ exports.createCampground = async (req, res, next) => {
         res.status(500).json({ success: false, message: 'Server error' });
     }
 };
+
+// @desc    Update campground
+// @route   PUT /api/v1/campgrounds/:id
+// @access  Private
+exports.updateCampground = async (req, res, next) => {
+    try {
+        const campground = await Campground.findByIdAndUpdate(req.params.id, req.body, {
+            new: true,
+            runValidators: true
+        });
+        if (!campground) {
+            return res.status(400).json({ success: false });
+        }
+        res.status(200).json({ success: true, data: campground });
+    } catch (err) {
+        res.status(400).json({ success: false });
+    }
+};

@@ -1,5 +1,5 @@
 const express = require('express');
-const {getCampgrounds, getCampground, createCampground} = require('../controllers/campgrounds');
+const {getCampgrounds, getCampground, createCampground, updateCampground} = require('../controllers/campgrounds');
 
 // Include other resource routers
 const bookingRouter = require('./bookings');
@@ -12,6 +12,6 @@ const router = express.Router();
 router.use('/:campgroundId/bookings', bookingRouter);
 
 router.route('/').get(getCampgrounds).post(protect, authorize('admin'), createCampground);
-router.route('/:id').get(getCampground);
+router.route('/:id').get(getCampground).put(protect, authorize('admin'), updateCampground);
 
 module.exports = router;
