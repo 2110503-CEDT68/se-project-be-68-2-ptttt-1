@@ -146,3 +146,19 @@ exports.updateCampground = async (req, res, next) => {
         res.status(400).json({ success: false });
     }
 };
+
+// @desc    Delete campground
+// @route   DELETE /api/v1/campgrounds/:id
+// @access  Private
+exports.deleteCampground = async (req, res, next) => {
+    try {
+        const campground = await Campground.findById(req.params.id);
+        if (!campground)
+            return res.status(400).json({ success: false, message: `Campground not found with id of ${req.params.id}` });
+        await Booking.deleteMany({ campground: req.params.id });
+        await Campground.deleteOne({ _id: req.params.id });
+        res.status(200).json({ success: true, data: {} });
+    } catch (err) {
+        res.status(400).json({ success: false });
+    }
+};
