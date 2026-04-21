@@ -22,12 +22,17 @@ const CampgroundSchema = new mongoose.Schema(
       type: String,
       required: [true, "Please add a picture"],
     },
-    rating: {
+    sumRating: {
       type: Number,
       default: 0,
-      min: 0,
-      max: 5,
-      set: (v) => Math.round(v * 100) / 100,
+    },
+    countReview: {
+      type: Number,
+      default: 0,
+    },
+    ratingCount: {
+      type: [Number],
+      default: [0, 0, 0, 0, 0],
     },
   },
   {
