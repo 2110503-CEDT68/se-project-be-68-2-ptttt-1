@@ -120,3 +120,58 @@ exports.getReviews = async (req, res, next) => {
     });
   }
 };
+
+// @desc    Delete review
+// @route   DELETE /api/v1/reviews/:id
+// @access  Private
+exports.deleteReview = async (req, res) => {
+  try {
+    const review = await Review.findById(req.params.id);
+
+    if (!review) {
+      return res.status(404).json({
+        success: false,
+        msg: `No review with the id of ${req.params.id}`,
+      });
+    }
+
+    // Make sure review belongs to user
+    if (review.user.toString() !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        msg: "Not authorized to delete this review",
+      });
+    }
+
+    // Fetch the campground to update stats
+    const campground = await Campground.findById(review.campground);
+
+    if (campground) {
+      // Decrease the stats relative to this review
+      const rating = Number(review.rating);
+      campground.sumRating -= rating;
+      campground.countReview -= 1;
+
+      // Ensure it doesn't go below 0
+      if (campground.ratingCount[rating - 1] > 0) {
+        campground.ratingCount[rating - 1] -= 1;
+      }
+
+      campground.markModified("ratingCount");
+      await campground.save();
+    }
+
+    await review.deleteOne();
+
+    res.status(200).json({
+      success: true,
+      data: {},
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({
+      success: false,
+      msg: "Server error",
+    });
+  }
+};
