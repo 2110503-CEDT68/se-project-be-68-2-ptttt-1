@@ -70,6 +70,20 @@ exports.createReview = async (req, res) => {
       });
     }
 
+    // validate rating value explicitly before saving
+    // model-level validation catches this too, but gives a generic "Server error" message
+    if (!req.body.rating) {
+      return res.status(400).json({ success: false, msg: "Please provide a rating" });
+    }
+
+    const ratingValue = Number(req.body.rating);
+    if (isNaN(ratingValue) || !Number.isInteger(ratingValue) || ratingValue < 1 || ratingValue > 5) {
+      return res.status(400).json({
+        success: false,
+        msg: "Rating must be an integer between 1 and 5",
+      });
+    }
+
     const review = await Review.create(req.body);
 
     // update campground rating stats
