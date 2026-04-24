@@ -14,6 +14,14 @@ exports.createReview = async (req, res) => {
     req.body.campground = campgroundId;
     req.body.user = req.user.id;
 
+    // validate comment
+    if (!req.body.comment || req.body.comment.trim().length === 0) {
+      return res.status(400).json({ success: false, msg: "Please provide a comment" });
+    }
+    if (req.body.comment.trim().length > 1000) {
+      return res.status(400).json({ success: false, msg: "Comment must not exceed 1000 characters" });
+    }
+
     // check if campground exists
     const campground = await Campground.findById(campgroundId);
     if (!campground) {
