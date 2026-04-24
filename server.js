@@ -28,7 +28,7 @@ app.set("query parser", "extended");
 app.use(express.json());
 
 // Sanitize data
-// app.use(mongoSanitize());
+app.use(mongoSanitize({ allowDots: true, patterns: [/\$[\w]+/g] }));
 
 // Cookie Parser
 app.use(cookieParser());
