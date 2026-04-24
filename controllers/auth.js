@@ -21,7 +21,9 @@ const sendTokenResponse = (user, statusCode, res) => {
 };
 
 
-//register
+// @desc    Register user
+// @route   POST /api/v1/auth/register
+// @access  Public
 exports.register = async (req,res,next) => {
     try{
         const {name,tel,email,password,role} = req.body;
@@ -58,7 +60,9 @@ exports.register = async (req,res,next) => {
 };
 
 
-//login
+// @desc    Login user
+// @route   POST /api/v1/auth/login
+// @access  Public
 exports.login = async (req,res,next) => {
 
     try{
@@ -113,7 +117,9 @@ exports.login = async (req,res,next) => {
 }
 
 
-//Get me
+// @desc    Get current logged in user
+// @route   GET /api/v1/auth/me
+// @access  Private
 exports.getMe = async (req,res,next) => {
     const user = await User.findById(req.user.id);
 
@@ -123,7 +129,9 @@ exports.getMe = async (req,res,next) => {
     });
 };
 
-//logout
+// @desc    Log user out / clear cookie
+// @route   GET /api/v1/auth/logout
+// @access  Private
 exports.logout = async (req,res,next) => {
     res.cookie('token','',{
         expires: new Date(Date.now() + 10*1000),
@@ -135,13 +143,9 @@ exports.logout = async (req,res,next) => {
     });
 };
 
-//changepassword
-//req body มีแค่ currentpassword กับ newpassword
-//ex.
-// {
-//   "currentPassword": "xxx",
-//   "newPassword": "yyy"
-// }
+// @desc    Change password
+// @route   PUT /api/v1/auth/changePassword
+// @access  Private
 exports.changePassword = async (req, res, next) => {
     try {
         
@@ -183,8 +187,8 @@ exports.changePassword = async (req, res, next) => {
 };
 
 // @desc    Delete user and their bookings
-// @route   /api/v1/auth/delete
-// @access  Private
+// @route   DELETE /api/v1/auth/delete/:id
+// @access  Private/Admin
 exports.deleteUser = async (req, res, next) => {
     try {
         const user = await User.findById(req.params.id);

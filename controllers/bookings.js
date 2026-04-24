@@ -39,6 +39,9 @@ exports.getBookings = async (req, res) => {
   }
 };
 
+// @desc    Get single booking
+// @route   GET /api/v1/bookings/:id
+// @access  Private
 exports.getBooking = async (req, res) => {
   try {
     const booking = await Booking.findById(req.params.id)
@@ -66,6 +69,9 @@ exports.getBooking = async (req, res) => {
   }
 };
 
+// @desc    Add booking
+// @route   POST /api/v1/campgrounds/:campgroundId/bookings
+// @access  Private
 exports.addBooking = async (req, res) => {
   try {
     req.body.campground = req.params.campgroundId;
@@ -112,6 +118,9 @@ if (existing.length >= 3 && req.user.role != "admin") {
   }
 };
 
+// @desc    Update booking
+// @route   PUT /api/v1/bookings/:id
+// @access  Private
 exports.updateBooking = async (req, res) => {
   try {
     let booking = await Booking.findById(req.params.id);
@@ -139,6 +148,9 @@ exports.updateBooking = async (req, res) => {
   }
 };
 
+// @desc    Delete booking
+// @route   DELETE /api/v1/bookings/:id
+// @access  Private
 exports.deleteBooking = async (req, res) => {
   try {
     const booking = await Booking.findById(req.params.id);
