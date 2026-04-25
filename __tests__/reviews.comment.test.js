@@ -1,0 +1,293 @@
+/**
+ * Test Suite: Comment the Campground (US2-1 / US2-2)
+ *
+ * POST /api/v1/campgrounds/:campgroundId/reviews
+ * Access: authenticated user (requires JWT)
+ *
+ * Focus: comment validation + booking ownership / duplicate handling
+ *
+ * TC grouping:
+ *   [Auth]                TC-1
+ *   [Valid Comment]       TC-2 – TC-6
+ *   [Invalid Comment]     TC-7 – TC-11
+ *   [Booking & Duplicate] TC-12 – TC-13
+ */
+
+require('./setup');
+
+const request = require('supertest');
+const app = require('../app');
+const { createUserAndToken } = require('./helpers/authHelper');
+const {
+  createCampgroundAndBooking,
+  buildReviewPayload,
+} = require('./helpers/reviewHelper');
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// GROUP 1 — Authentication
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── TC-1: No authentication token ───────────────────────────────────────────
+
+describe('TC-1: No authentication token', () => {
+  it('should return 401', async () => {
+    const { user } = await createUserAndToken('user');
+    const { campground, booking } = await createCampgroundAndBooking(user._id);
+
+    const res = await request(app)
+      .post(`/api/v1/campgrounds/${campground._id}/reviews`)
+      .send(buildReviewPayload(booking._id));
+
+    expect(res.status).toBe(401);
+    expect(res.body.success).toBe(false);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// GROUP 2 — Valid Comment Values
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── TC-2: Normal comment text ───────────────────────────────────────────────
+
+describe('TC-2: Normal comment text', () => {
+  it('should return 201 and store the comment', async () => {
+    const { user, token } = await createUserAndToken('user');
+    const { campground, booking } = await createCampgroundAndBooking(user._id);
+
+    const res = await request(app)
+      .post(`/api/v1/campgrounds/${campground._id}/reviews`)
+      .set('Authorization', `Bearer ${token}`)
+      .send(buildReviewPayload(booking._id, { comment: 'Lovely place to stay.' }));
+
+    expect(res.status).toBe(201);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.comment).toBe('Lovely place to stay.');
+  });
+});
+
+// ─── TC-3: Single character comment ──────────────────────────────────────────
+
+describe('TC-3: Single character comment "A"', () => {
+  it('should return 201 (minlength is 1)', async () => {
+    const { user, token } = await createUserAndToken('user');
+    const { campground, booking } = await createCampgroundAndBooking(user._id);
+
+    const res = await request(app)
+      .post(`/api/v1/campgrounds/${campground._id}/reviews`)
+      .set('Authorization', `Bearer ${token}`)
+      .send(buildReviewPayload(booking._id, { comment: 'A' }));
+
+    expect(res.status).toBe(201);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.comment).toBe('A');
+  });
+});
+
+// ─── TC-4: Comment with exactly 1000 characters ──────────────────────────────
+
+describe('TC-4: Comment with exactly 1000 characters', () => {
+  it('should return 201 (boundary value)', async () => {
+    const { user, token } = await createUserAndToken('user');
+    const { campground, booking } = await createCampgroundAndBooking(user._id);
+
+    const longComment = 'a'.repeat(1000);
+
+    const res = await request(app)
+      .post(`/api/v1/campgrounds/${campground._id}/reviews`)
+      .set('Authorization', `Bearer ${token}`)
+      .send(buildReviewPayload(booking._id, { comment: longComment }));
+
+    expect(res.status).toBe(201);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.comment.length).toBe(1000);
+  });
+});
+
+// ─── TC-5: Comment with leading/trailing whitespace ──────────────────────────
+
+describe('TC-5: Comment with leading/trailing whitespace', () => {
+  it('should return 201 and trim the comment', async () => {
+    const { user, token } = await createUserAndToken('user');
+    const { campground, booking } = await createCampgroundAndBooking(user._id);
+
+    const res = await request(app)
+      .post(`/api/v1/campgrounds/${campground._id}/reviews`)
+      .set('Authorization', `Bearer ${token}`)
+      .send(buildReviewPayload(booking._id, { comment: '   Nice and quiet.   ' }));
+
+    expect(res.status).toBe(201);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.comment).toBe('Nice and quiet.');
+  });
+});
+
+// ─── TC-6: Comment with special characters and newlines ──────────────────────
+
+describe('TC-6: Comment with special characters and newlines', () => {
+  it('should return 201 and preserve content', async () => {
+    const { user, token } = await createUserAndToken('user');
+    const { campground, booking } = await createCampgroundAndBooking(user._id);
+
+    const comment = 'Great spot! 🏕️\nWould visit again — 5/5.';
+
+    const res = await request(app)
+      .post(`/api/v1/campgrounds/${campground._id}/reviews`)
+      .set('Authorization', `Bearer ${token}`)
+      .send(buildReviewPayload(booking._id, { comment }));
+
+    expect(res.status).toBe(201);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.comment).toBe(comment);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// GROUP 3 — Invalid Comment Values
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── TC-7: Comment exceeds 1000 characters ───────────────────────────────────
+
+describe('TC-7: Comment exceeds 1000 characters (1001 chars)', () => {
+  it('should return 400 with "must not exceed" message', async () => {
+    const { user, token } = await createUserAndToken('user');
+    const { campground, booking } = await createCampgroundAndBooking(user._id);
+
+    const tooLong = 'a'.repeat(1001);
+
+    const res = await request(app)
+      .post(`/api/v1/campgrounds/${campground._id}/reviews`)
+      .set('Authorization', `Bearer ${token}`)
+      .send(buildReviewPayload(booking._id, { comment: tooLong }));
+
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+    expect(res.body.msg).toMatch(/must not exceed/i);
+  });
+});
+
+// ─── TC-8: Missing comment field ─────────────────────────────────────────────
+
+describe('TC-8: Missing comment field', () => {
+  it('should return 400 with "provide a comment" message', async () => {
+    const { user, token } = await createUserAndToken('user');
+    const { campground, booking } = await createCampgroundAndBooking(user._id);
+
+    const payload = buildReviewPayload(booking._id);
+    delete payload.comment;
+
+    const res = await request(app)
+      .post(`/api/v1/campgrounds/${campground._id}/reviews`)
+      .set('Authorization', `Bearer ${token}`)
+      .send(payload);
+
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+    expect(res.body.msg).toMatch(/provide a comment/i);
+  });
+});
+
+// ─── TC-9: Empty string comment ──────────────────────────────────────────────
+
+describe('TC-9: Empty string comment', () => {
+  it('should return 400 with "provide a comment" message', async () => {
+    const { user, token } = await createUserAndToken('user');
+    const { campground, booking } = await createCampgroundAndBooking(user._id);
+
+    const res = await request(app)
+      .post(`/api/v1/campgrounds/${campground._id}/reviews`)
+      .set('Authorization', `Bearer ${token}`)
+      .send(buildReviewPayload(booking._id, { comment: '' }));
+
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+    expect(res.body.msg).toMatch(/provide a comment/i);
+  });
+});
+
+// ─── TC-10: Whitespace-only comment ──────────────────────────────────────────
+
+describe('TC-10: Whitespace-only comment', () => {
+  it('should return 400 with "provide a comment" message', async () => {
+    const { user, token } = await createUserAndToken('user');
+    const { campground, booking } = await createCampgroundAndBooking(user._id);
+
+    const res = await request(app)
+      .post(`/api/v1/campgrounds/${campground._id}/reviews`)
+      .set('Authorization', `Bearer ${token}`)
+      .send(buildReviewPayload(booking._id, { comment: '     ' }));
+
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+    expect(res.body.msg).toMatch(/provide a comment/i);
+  });
+});
+
+// ─── TC-11: Comment = null ───────────────────────────────────────────────────
+
+describe('TC-11: Comment = null', () => {
+  it('should return 400 with "provide a comment" message', async () => {
+    const { user, token } = await createUserAndToken('user');
+    const { campground, booking } = await createCampgroundAndBooking(user._id);
+
+    const res = await request(app)
+      .post(`/api/v1/campgrounds/${campground._id}/reviews`)
+      .set('Authorization', `Bearer ${token}`)
+      .send(buildReviewPayload(booking._id, { comment: null }));
+
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+    expect(res.body.msg).toMatch(/provide a comment/i);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// GROUP 4 — Booking Ownership & Duplicate
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── TC-12: Missing booking ID ───────────────────────────────────────────────
+
+describe('TC-12: Missing booking ID', () => {
+  it('should return 400 with "provide a booking ID" message', async () => {
+    const { user, token } = await createUserAndToken('user');
+    const { campground } = await createCampgroundAndBooking(user._id);
+
+    const payload = buildReviewPayload(undefined);
+    delete payload.booking;
+
+    const res = await request(app)
+      .post(`/api/v1/campgrounds/${campground._id}/reviews`)
+      .set('Authorization', `Bearer ${token}`)
+      .send(payload);
+
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+    expect(res.body.msg).toMatch(/provide a booking/i);
+  });
+});
+
+// ─── TC-13: Duplicate review on same booking ─────────────────────────────────
+
+describe('TC-13: Duplicate review on the same booking', () => {
+  it('should return 400 with "already reviewed" message on second submission', async () => {
+    const { user, token } = await createUserAndToken('user');
+    const { campground, booking } = await createCampgroundAndBooking(user._id);
+
+    // first review — should succeed
+    const first = await request(app)
+      .post(`/api/v1/campgrounds/${campground._id}/reviews`)
+      .set('Authorization', `Bearer ${token}`)
+      .send(buildReviewPayload(booking._id, { comment: 'First review' }));
+
+    expect(first.status).toBe(201);
+
+    // second review — same booking — should fail
+    const second = await request(app)
+      .post(`/api/v1/campgrounds/${campground._id}/reviews`)
+      .set('Authorization', `Bearer ${token}`)
+      .send(buildReviewPayload(booking._id, { comment: 'Second review' }));
+
+    expect(second.status).toBe(400);
+    expect(second.body.success).toBe(false);
+    expect(second.body.msg).toMatch(/already reviewed/i);
+  });
+});
