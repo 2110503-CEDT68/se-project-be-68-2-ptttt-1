@@ -8,9 +8,10 @@
  *
  * TC grouping:
  *   [Auth]                TC-1
- *   [Valid Comment]       TC-2 – TC-6
- *   [Invalid Comment]     TC-7 – TC-11
+ *   [Valid Comment]       TC-2  – TC-6
+ *   [Invalid Comment]     TC-7  – TC-11
  *   [Booking & Duplicate] TC-12 – TC-13
+ *   [Invalid IDs & Auth]  TC-14 – TC-16
  */
 
 require('./setup');
@@ -289,5 +290,100 @@ describe('TC-13: Duplicate review on the same booking', () => {
     expect(second.status).toBe(400);
     expect(second.body.success).toBe(false);
     expect(second.body.msg).toMatch(/already reviewed/i);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// GROUP 5 — Invalid IDs & Booking Authorization
+//
+// TC-14 : invalid campground ID (not a valid ObjectId) → 400/404
+// TC-15 : invalid booking ID   (not a valid ObjectId) → 400/404
+// TC-16 : booking belongs to a different user         → 403
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const mongoose = require('mongoose');
+const User = require('../models/User');
+const jwt = require('jsonwebtoken');
+
+// ─── TC-14: Invalid campground ID ────────────────────────────────────────────
+//
+// :campgroundId is not a valid ObjectId → controller's Campground.findById
+// throws a CastError which falls into the catch block → 400.
+
+describe('TC-14: Invalid campground ID', () => {
+  it('should return 400 or 404', async () => {
+    const { user, token } = await createUserAndToken('user');
+    const { booking } = await createCampgroundAndBooking(user._id);
+
+    const res = await request(app)
+      .post('/api/v1/campgrounds/not-a-valid-id/reviews')
+      .set('Authorization', `Bearer ${token}`)
+      .send(buildReviewPayload(booking._id));
+
+    expect([400, 404]).toContain(res.status);
+    expect(res.body.success).toBe(false);
+  });
+});
+
+// ─── TC-15: Invalid booking ID ───────────────────────────────────────────────
+//
+// booking field is not a valid ObjectId → Booking.findById throws CastError
+// or returns null → controller returns 404.
+
+describe('TC-15: Invalid booking ID', () => {
+  it('should return 400 or 404', async () => {
+    const { user, token } = await createUserAndToken('user');
+    const { campground } = await createCampgroundAndBooking(user._id);
+
+    const res = await request(app)
+      .post(`/api/v1/campgrounds/${campground._id}/reviews`)
+      .set('Authorization', `Bearer ${token}`)
+      .send(buildReviewPayload('not-a-valid-id'));
+
+    expect([400, 404]).toContain(res.status);
+    expect(res.body.success).toBe(false);
+  });
+});
+
+// ─── TC-16: Booking belongs to a different user ──────────────────────────────
+//
+// userA owns the booking; userB submits the review → 403.
+
+describe('TC-16: Booking belongs to a different user', () => {
+  it('should return 403', async () => {
+    // Create userA (booking owner) and userB (reviewer)
+    const userA = await User.create({
+      name: 'User A',
+      email: `usera-${Date.now()}@test.com`,
+      password: 'password123',
+      tel: `081${Date.now().toString().slice(-7)}`,
+      role: 'user',
+    });
+    const userB = await User.create({
+      name: 'User B',
+      email: `userb-${Date.now()}@test.com`,
+      password: 'password123',
+      tel: `082${(Date.now() + 1).toString().slice(-7)}`,
+      role: 'user',
+    });
+
+    const tokenB = jwt.sign(
+      { id: userB._id },
+      process.env.JWT_SECRET || 'test_secret',
+      { expiresIn: '1h' }
+    );
+
+    // booking is owned by userA
+    const { campground, booking } = await createCampgroundAndBooking(userA._id);
+
+    // userB tries to review it
+    const res = await request(app)
+      .post(`/api/v1/campgrounds/${campground._id}/reviews`)
+      .set('Authorization', `Bearer ${tokenB}`)
+      .send(buildReviewPayload(booking._id));
+
+    expect(res.status).toBe(403);
+    expect(res.body.success).toBe(false);
+    expect(res.body.msg).toMatch(/not authorized/i);
   });
 });

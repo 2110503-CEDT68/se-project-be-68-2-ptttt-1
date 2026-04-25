@@ -9,8 +9,13 @@ const createCampgroundAndBooking = async (userId, overrides = {}) => {
     picture: 'https://example.com/img.jpg',
   });
 
+  // Default to yesterday so the "review only after checkout" rule is satisfied
+  const yesterday = new Date();
+  yesterday.setHours(0, 0, 0, 0);
+  yesterday.setDate(yesterday.getDate() - 1);
+
   const booking = await Booking.create({
-    bookingDate: overrides.bookingDate || new Date(),
+    bookingDate: overrides.bookingDate || yesterday,
     nights: overrides.nights || 2,
     user: userId,
     campground: campground._id,
@@ -20,8 +25,12 @@ const createCampgroundAndBooking = async (userId, overrides = {}) => {
 };
 
 const createBooking = async (userId, campgroundId, overrides = {}) => {
+  const yesterday = new Date();
+  yesterday.setHours(0, 0, 0, 0);
+  yesterday.setDate(yesterday.getDate() - 1);
+
   return await Booking.create({
-    bookingDate: overrides.bookingDate || new Date(),
+    bookingDate: overrides.bookingDate || yesterday,
     nights: overrides.nights || 2,
     user: userId,
     campground: campgroundId,
