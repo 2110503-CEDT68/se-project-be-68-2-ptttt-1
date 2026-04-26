@@ -23,6 +23,12 @@ app.use(xss());
 const limiter = rateLimit({
   windowMs: 10 * 60 * 1000,
   max: 300,
+  // Skip the limiter entirely in non-production. Dev mode + Next.js +
+  // NextAuth + Playwright workers easily exceed 300/10min — and even 5000
+  // gets brushed when NextAuth polls /auth/me on every navigation. The
+  // limiter exists to protect the public API in production; locally it
+  // just makes tests flaky for no security benefit.
+  skip: () => process.env.NODE_ENV !== 'production',
 });
 app.use(limiter);
 app.use(hpp());
