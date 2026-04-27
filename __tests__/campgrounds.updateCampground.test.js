@@ -1,5 +1,5 @@
 /**
- * Test Suite: Update Campground
+ * Test Suite: Update Campground (US1-2)
  *
  * PUT /api/v1/campgrounds/:id
  * Access: admin only (requires JWT + role=admin)
