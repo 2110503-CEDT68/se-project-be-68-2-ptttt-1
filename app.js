@@ -9,7 +9,7 @@ const hpp = require('hpp');
 const campgrounds = require('./routes/campgrounds');
 const auth = require('./routes/auth');
 const bookings = require('./routes/bookings');
-
+const reviews = require('./routes/reviews'); 
 const app = express();
 
 app.set('query parser', 'extended');
@@ -36,5 +36,6 @@ app.use(hpp());
 app.use('/api/v1/campgrounds', campgrounds);
 app.use('/api/v1/auth', auth);
 app.use('/api/v1/bookings', bookings);
+app.use('/api/v1/reviews', reviews); 
 
 module.exports = app;
