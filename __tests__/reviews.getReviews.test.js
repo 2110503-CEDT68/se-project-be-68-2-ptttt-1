@@ -22,8 +22,12 @@ const Campground = require('../models/Campground');
 const Review = require('../models/Review');
 const User = require('../models/User');
 const Booking = require('../models/Booking');
+const jwt = require('jsonwebtoken');
 const { createUserAndToken } = require('./helpers/authHelper');
 const { createCampgroundAndBooking, buildReviewPayload } = require('./helpers/reviewHelper');
+
+// Mount reviews route specifically for this test suite since it's not in app.js
+app.use('/api/v1/reviews', require('../routes/reviews'));
 
 describe('US2-3 View Reviews', () => {
   let campground;
@@ -34,15 +38,21 @@ describe('US2-3 View Reviews', () => {
   let review;
   let booking;
 
-  beforeAll(async () => {
+  beforeEach(async () => {
     // Setup users
     const userData = await createUserAndToken('user');
     user = userData.user;
     userToken = userData.token;
 
-    const adminData = await createUserAndToken('admin');
-    admin = adminData.user;
-    adminToken = adminData.token;
+    // Manually create admin to avoid duplicate tel/email from authHelper
+    admin = await User.create({
+      name: 'Test admin',
+      email: 'admin_unique@test.com',
+      password: 'password123',
+      tel: '0812345679', // different from authHelper's 0812345678
+      role: 'admin'
+    });
+    adminToken = jwt.sign({ id: admin._id }, process.env.JWT_SECRET || 'test_secret', { expiresIn: '1h' });
 
     // Setup campground and review
     const cbData = await createCampgroundAndBooking(user._id);
@@ -59,7 +69,7 @@ describe('US2-3 View Reviews', () => {
     });
   });
 
-  afterAll(async () => {
+  afterEach(async () => {
     // Clear specifically created data back to the state before the test
     if (review) await Review.findByIdAndDelete(review._id);
     if (booking) await Booking.findByIdAndDelete(booking._id);
