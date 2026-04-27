@@ -132,3 +132,32 @@ describe('TC-5: Campground ID does not exist', () => {
     expect(res.body.success).toBe(false);
   });
 });
+// ═══════════════════════════════════════════════════════════════════════════════
+// GROUP 4 — Error Handling
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── TC-6: Server error during deleteCampground ───────────────────────────────
+
+describe('TC-6: Server error during deleteCampground', () => {
+  it('should return 400 with success false when database operation fails', async () => {
+    const { token } = await createUserAndToken('admin');
+    const campground = await createTestCampground();
+    const Campground = require('../models/Campground');
+    
+    // Mock Campground.findById to throw an error
+    const originalFindById = Campground.findById;
+    Campground.findById = jest.fn().mockImplementationOnce(() => {
+      throw new Error('Database connection failed');
+    });
+
+    const res = await request(app)
+      .delete(`/api/v1/campgrounds/${campground._id}`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+
+    // Restore original implementation
+    Campground.findById = originalFindById;
+  });
+});
