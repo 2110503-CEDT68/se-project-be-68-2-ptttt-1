@@ -2,10 +2,12 @@ const Campground = require('../../models/Campground');
 const Booking = require('../../models/Booking');
 
 const createCampgroundAndBooking = async (userId, overrides = {}) => {
+  const unique = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+
   const campground = await Campground.create({
-    name: overrides.campgroundName || 'Test Camp',
+    name: overrides.campgroundName || `Test Camp ${unique}`,
     address: '123 Test Road, Chiang Mai',
-    tel: '0812345678',
+    tel: `0${Math.floor(Math.random() * 9000000000 + 1000000000)}`, // ← unique
     picture: 'https://example.com/img.jpg',
   });
 

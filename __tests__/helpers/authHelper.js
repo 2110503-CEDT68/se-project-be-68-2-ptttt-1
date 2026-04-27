@@ -1,15 +1,14 @@
 const jwt = require('jsonwebtoken');
 const User = require('../../models/User');
 
-/**
- * Create a test user and return a signed JWT token
- */
 const createUserAndToken = async (role = 'user') => {
+  const unique = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+
   const user = await User.create({
-    name: `Test ${role}`,
-    email: `${role}@test.com`,
+    name: `Test ${role} ${unique}`,
+    email: `${role}_${unique}@test.com`,
     password: 'password123',
-    tel: '0812345678',
+    tel: `0${Math.floor(Math.random() * 9000000000 + 1000000000)}`,
     role,
   });
 
