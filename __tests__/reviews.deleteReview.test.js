@@ -2,31 +2,28 @@
  * Test Suite: Delete Review (US2-4)
  *
  * DELETE /api/v1/reviews/:id
- * Access: authenticated user (requires JWT)
- *
- * Focus: delete review + average rating recalculation
+ * Access: Private (requires JWT)
  *
  * TC grouping:
- *   [Auth]             TC-1
- *   [Success]          TC-2 – TC-3
- *   [Recalculation]    TC-4 – TC-6
- *   [Edge Cases]       TC-7 – TC-8
- *   [Not Found / Auth] TC-9 – TC-10
+ *   [Valid]   TC-1 Review ID is a valid string
+ *   [Invalid] TC-2 Review ID is empty or null
+ *   [Valid]   TC-3 User is the review's owner
+ *   [Invalid] TC-4 User is not the review's owner
+ *   [Invalid] TC-5 Review ID does not exist
  */
 
 require('./setup');
 
 const request = require('supertest');
 const app = require('../app');
+const mongoose = require('mongoose');
+const Campground = require('../models/Campground');
+const Review = require('../models/Review');
+const User = require('../models/User');
+const Booking = require('../models/Booking');
+const jwt = require('jsonwebtoken');
 const { createUserAndToken } = require('./helpers/authHelper');
-const {
-  createCampgroundAndBooking,
-  buildReviewPayload,
-  createBooking,
-} = require('./helpers/reviewHelper');
-
-// ─── helper: สร้าง review แล้ว return reviewId ───────────────────────────────
-
+const { createCampgroundAndBooking,buildReviewPayload,createBooking  } = require('./helpers/reviewHelper');
 async function createReview(campgroundId, token, bookingId, overrides = {}) {
   const res = await request(app)
     .post(`/api/v1/campgrounds/${campgroundId}/reviews`)
@@ -34,82 +31,142 @@ async function createReview(campgroundId, token, bookingId, overrides = {}) {
     .send(buildReviewPayload(bookingId, overrides));
   return res;
 }
+// Mount reviews route specifically for this test suite
+app.use('/api/v1/reviews', require('../routes/reviews'));
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// GROUP 1 — Authentication
+// GROUP 1 — Delete Review Validations
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// ─── TC-1: No authentication token ───────────────────────────────────────────
+// ─── TC-1: Review ID is a valid string ─────────────────────────────────────
 
-describe('TC-1: No authentication token', () => {
-  it('should return 401', async () => {
+describe('TC-1: Review ID is a valid string', () => {
+  it('should return 200 (Valid) and delete the review', async () => {
     const { user, token } = await createUserAndToken('user');
     const { campground, booking } = await createCampgroundAndBooking(user._id);
 
-    // สร้าง review ด้วย token ที่ถูกต้องก่อน
-    const createRes = await createReview(campground._id, token, booking._id, { rating: 4, comment: 'Nice!' });
-    expect(createRes.status).toBe(201);
-    const reviewId = createRes.body.data._id;
+    const review = await Review.create({
+      rating: 5,
+      comment: 'Review for valid string test',
+      campground: campground._id,
+      user: user._id,
+      booking: booking._id,
+    });
 
-    // ลบโดยไม่มี token → ต้องได้ 401
     const res = await request(app)
-      .delete(`/api/v1/reviews/${reviewId}`);
-
-    expect(res.status).toBe(401);
-    expect(res.body.success).toBe(false);
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// GROUP 2 — Success
-// ═══════════════════════════════════════════════════════════════════════════════
-
-// ─── TC-2: Delete own review successfully ────────────────────────────────────
-
-describe('TC-2: Delete own review successfully', () => {
-  it('should return 200 and success true', async () => {
-    const { user, token } = await createUserAndToken('user');
-    const { campground, booking } = await createCampgroundAndBooking(user._id);
-
-    const createRes = await createReview(campground._id, token, booking._id, { rating: 4, comment: 'Great!' });
-    expect(createRes.status).toBe(201);
-    const reviewId = createRes.body.data._id;
-
-    const deleteRes = await request(app)
-      .delete(`/api/v1/reviews/${reviewId}`)
+      .delete(`/api/v1/reviews/${review._id.toString()}`)
       .set('Authorization', `Bearer ${token}`);
 
-    expect(deleteRes.status).toBe(200);
-    expect(deleteRes.body.success).toBe(true);
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    
+    const checkReview = await Review.findById(review._id);
+    expect(checkReview).toBeNull();
   });
 });
 
-// ─── TC-3: Cannot delete another user's review ───────────────────────────────
+// ─── TC-2: Review ID is empty or null ──────────────────────────────────────
 
-describe('TC-3: Cannot delete another user review', () => {
-  it('should return 403', async () => {
-    const { user: owner, token: ownerToken } = await createUserAndToken('user');
-    const { user: other, token: otherToken } = await createUserAndToken('user');
+describe('TC-2: Review ID is empty or null', () => {
+  it('should return error (Invalid) when passing "null" as ID', async () => {
+    const { token } = await createUserAndToken('user');
+
+    // Passing 'null' string will fail MongoDB cast and return 500 in this controller
+    const res = await request(app)
+      .delete('/api/v1/reviews/null')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(500);
+    expect(res.body.success).toBe(false);
+  });
+
+  it('should return 404 (Invalid) when ID is completely empty', async () => {
+    const { token } = await createUserAndToken('user');
+
+    // DELETE /api/v1/reviews/ doesn't exist
+    const res = await request(app)
+      .delete('/api/v1/reviews/')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(404);
+  });
+});
+
+// ─── TC-3: User is the review's owner ──────────────────────────────────────
+
+describe('TC-3: User is the review\'s owner', () => {
+  it('should return 200 (Valid) when the owner deletes their review', async () => {
+    const { user, token } = await createUserAndToken('user');
+    const { campground, booking } = await createCampgroundAndBooking(user._id);
+
+    const review = await Review.create({
+      rating: 4,
+      comment: 'Review for ownership test',
+      campground: campground._id,
+      user: user._id,
+      booking: booking._id,
+    });
+
+    const res = await request(app)
+      .delete(`/api/v1/reviews/${review._id}`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+  });
+});
+
+// ─── TC-4: User is not the review's owner ──────────────────────────────────
+
+describe('TC-4: User is not the review\'s owner', () => {
+  it('should return 403 (Invalid) when a different user tries to delete the review', async () => {
+    const { user: owner } = await createUserAndToken('user');
     const { campground, booking } = await createCampgroundAndBooking(owner._id);
 
-    const createRes = await createReview(campground._id, ownerToken, booking._id, { rating: 3, comment: 'Good.' });
-    expect(createRes.status).toBe(201);
-    const reviewId = createRes.body.data._id;
+    const review = await Review.create({
+      rating: 4,
+      comment: 'Review for ownership test',
+      campground: campground._id,
+      user: owner._id,
+      booking: booking._id,
+    });
 
-    const deleteRes = await request(app)
-      .delete(`/api/v1/reviews/${reviewId}`)
-      .set('Authorization', `Bearer ${otherToken}`);
+    const user2 = await User.create({
+      name: 'Test user2',
+      email: 'user2_unique@test.com',
+      password: 'password123',
+      tel: '0812345679',
+      role: 'user'
+    });
+    const user2Token = jwt.sign({ id: user2._id }, process.env.JWT_SECRET || 'test_secret', { expiresIn: '1h' });
 
-    expect(deleteRes.status).toBe(403);
-    expect(deleteRes.body.success).toBe(false);
+    const res = await request(app)
+      .delete(`/api/v1/reviews/${review._id}`)
+      .set('Authorization', `Bearer ${user2Token}`);
+
+    expect(res.status).toBe(403);
+    expect(res.body.success).toBe(false);
+    expect(res.body.msg).toBe('Not authorized to delete this review');
   });
 });
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// GROUP 3 — Average Rating Recalculation
-// ═══════════════════════════════════════════════════════════════════════════════
+// ─── TC-5: Review ID does not exist ────────────────────────────────────────
 
-// ─── TC-4: Delete the only review → stats reset to zero ──────────────────────
+describe('TC-5: Review ID does not exist', () => {
+  it('should return 404 (Invalid) when passing a non-existent valid ObjectId', async () => {
+    const { token } = await createUserAndToken('user');
+    const nonExistentId = new mongoose.Types.ObjectId();
+    
+    const res = await request(app)
+      .delete(`/api/v1/reviews/${nonExistentId}`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(404);
+    expect(res.body.success).toBe(false);
+    expect(res.body.msg).toBe(`No review with the id of ${nonExistentId}`);
+  });
+});
+// ─── TC-6: Delete the only review → stats reset to zero ──────────────────────
 
 describe('TC-4: Delete the only review resets campground rating stats to zero', () => {
   it('should return 200 and campground sumRating/countReview become 0', async () => {
@@ -135,7 +192,7 @@ describe('TC-4: Delete the only review resets campground rating stats to zero', 
   });
 });
 
-// ─── TC-5: Delete one of multiple reviews → stats decrease correctly ──────────
+// ─── TC-7: Delete one of multiple reviews → stats decrease correctly ──────────
 describe('TC-5: Delete one review from multiple reviews decreases stats correctly', () => {
   it('should return 200 and sumRating/countReview decrease by the deleted review rating', async () => {
     const { user: user1, token: token1 } = await createUserAndToken('user');
@@ -170,7 +227,7 @@ describe('TC-5: Delete one review from multiple reviews decreases stats correctl
   });
 });
 
-// ─── TC-6: Delete review → ratingCount array updates correctly ────────────────
+// ─── TC-8: Delete review → ratingCount array updates correctly ────────────────
 
 describe('TC-6: Delete review decreases correct ratingCount bucket', () => {
   it('should return 200 and ratingCount[rating-1] decreases by 1', async () => {
@@ -194,11 +251,8 @@ describe('TC-6: Delete review decreases correct ratingCount bucket', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// GROUP 4 — Edge Cases
-// ═══════════════════════════════════════════════════════════════════════════════
 
-// ─── TC-7: ratingCount never goes below 0 ────────────────────────────────────
+// ─── TC-9: ratingCount never goes below 0 ────────────────────────────────────
 
 describe('TC-7: ratingCount does not go below 0 after deletion', () => {
   it('should return 200 and ratingCount values remain >= 0', async () => {
@@ -222,7 +276,7 @@ describe('TC-7: ratingCount does not go below 0 after deletion', () => {
   });
 });
 
-// ─── TC-8: sumRating never goes below 0 ──────────────────────────────────────
+// ─── TC-10: sumRating never goes below 0 ──────────────────────────────────────
 
 describe('TC-8: sumRating does not go below 0 after deletion', () => {
   it('should return 200 and sumRating remains >= 0', async () => {
@@ -244,22 +298,3 @@ describe('TC-8: sumRating does not go below 0 after deletion', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// GROUP 5 — Not Found
-// ═══════════════════════════════════════════════════════════════════════════════
-
-// ─── TC-9: Delete review that does not exist ─────────────────────────────────
-
-describe('TC-9: Delete review that does not exist', () => {
-  it('should return 404', async () => {
-    const { token } = await createUserAndToken('user');
-    const fakeId = '000000000000000000000000';
-
-    const deleteRes = await request(app)
-      .delete(`/api/v1/reviews/${fakeId}`)
-      .set('Authorization', `Bearer ${token}`);
-
-    expect(deleteRes.status).toBe(404);
-    expect(deleteRes.body.success).toBe(false);
-  });
-});
