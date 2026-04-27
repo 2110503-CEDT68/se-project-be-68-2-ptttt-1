@@ -1,5 +1,5 @@
 /**
- * Test Suite: View Reviews (US2-3)
+ * Test Suite: View Reviews (US2-3 / US2-5)
  *
  * GET /api/v1/campgrounds/:campgroundId/reviews
  * Access: Public (can also be accessed by Admin and Non-admin)
