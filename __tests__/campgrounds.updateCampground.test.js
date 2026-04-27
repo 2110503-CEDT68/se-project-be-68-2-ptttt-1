@@ -224,3 +224,33 @@ describe('TC-10: Update with malformed Campground ID', () => {
     expect(res.body.success).toBe(false);
   });
 });
+// ═══════════════════════════════════════════════════════════════════════════════
+// GROUP 5 — Error Handling
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── TC-11: Server error during updateCampground ──────────────────────────────
+
+describe('TC-11: Server error during updateCampground', () => {
+  it('should return 400 with success false when database operation fails', async () => {
+    const { token } = await createUserAndToken('admin');
+    const campground = await createTestCampground();
+    const Campground = require('../models/Campground');
+    
+    // Mock Campground.findByIdAndUpdate to throw an error
+    const originalFindByIdAndUpdate = Campground.findByIdAndUpdate;
+    Campground.findByIdAndUpdate = jest.fn().mockImplementationOnce(() => {
+      throw new Error('Database connection failed');
+    });
+
+    const res = await request(app)
+      .put(`/api/v1/campgrounds/${campground._id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send(validUpdatePayload);
+
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+
+    // Restore original implementation
+    Campground.findByIdAndUpdate = originalFindByIdAndUpdate;
+  });
+});

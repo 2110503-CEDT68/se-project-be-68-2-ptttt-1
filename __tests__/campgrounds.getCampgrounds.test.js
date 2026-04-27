@@ -226,3 +226,64 @@ describe('TC-10: Select specific fields (?select=name,tel)', () => {
     expect(item.picture).toBeUndefined();
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// GROUP 6 — Error Handling
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── TC-11: Server error during getCampgrounds ────────────────────────────────
+
+describe('TC-11: Server error during getCampgrounds', () => {
+  it('should return 400 with success false when database query fails', async () => {
+    const Campground = require('../models/Campground');
+    
+    // Mock Campground.find to throw an error
+    const originalFind = Campground.find;
+    Campground.find = jest.fn().mockImplementationOnce(() => {
+      throw new Error('Database connection failed');
+    });
+
+    const res = await request(app).get('/api/v1/campgrounds');
+
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+
+    // Restore original implementation
+    Campground.find = originalFind;
+  });
+});
+// ═══════════════════════════════════════════════════════════════════════════════
+// GROUP 7 — Advanced Query Features
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── TC-12: Query with operators (gt, gte, lt, lte, in) ───────────────────────
+
+describe('TC-12: Query with operators to test replace function', () => {
+  it('should handle query operators like gt, gte, lt, lte, in', async () => {
+    await createCampground({ name: 'Test Camp', tel: '0811111111' });
+
+    // This will trigger the replace function for operators
+    const res = await request(app).get('/api/v1/campgrounds?tel[in]=0811111111,0822222222');
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+  });
+});
+
+// ─── TC-13: Query with all removeFields to test forEach ───────────────────────
+
+describe('TC-13: Query with all removeFields to test forEach function', () => {
+  it('should remove select, sort, page, limit from query and process them separately', async () => {
+    await createCampground({ name: 'Test Camp 2', tel: '0833333333' });
+
+    // This will trigger the forEach function to remove fields
+    const res = await request(app).get('/api/v1/campgrounds?select=name&sort=name&page=1&limit=5&tel=0833333333');
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.count).toBe(1);
+    // Should only return name field due to select=name
+    expect(res.body.data[0].name).toBe('Test Camp 2');
+    expect(res.body.data[0].address).toBeUndefined();
+  });
+});

@@ -121,3 +121,33 @@ describe('TC-4: Non-admin view all reviews', () => {
     expect(res.body.count).toBe(1);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// GROUP 2 — Error Handling
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── TC-5: Server error during getReviews ────────────────────────────────────
+
+describe('TC-5: Server error during getReviews', () => {
+  it('should return 500 with "Server error" message when database query fails', async () => {
+    const { user } = await createUserAndToken('user');
+    const { campground } = await createCampgroundAndBooking(user._id);
+    
+    const Review = require('../models/Review');
+    
+    // Mock Review.find to throw an error
+    const originalFind = Review.find;
+    Review.find = jest.fn().mockImplementationOnce(() => {
+      throw new Error('Database query failed');
+    });
+
+    const res = await request(app).get(`/api/v1/campgrounds/${campground._id}/reviews`);
+
+    expect(res.status).toBe(500);
+    expect(res.body.success).toBe(false);
+    expect(res.body.msg).toBe('Server error');
+
+    // Restore original implementation
+    Review.find = originalFind;
+  });
+});

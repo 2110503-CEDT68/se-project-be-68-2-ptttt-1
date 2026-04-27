@@ -237,3 +237,32 @@ describe('TC-11: Duplicate campground name', () => {
     expect(res.body.message).toMatch(/already exists/i);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// GROUP 4 — Error Handling
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── TC-12: Generic server error during createCampground ──────────────────────
+
+describe('TC-12: Generic server error during createCampground', () => {
+  it('should return 500 with "Server error" message when unexpected error occurs', async () => {
+    const { token } = await createUserAndToken('admin');
+    const Campground = require('../models/Campground');
+    
+    // Mock Campground.create to throw a generic error (not ValidationError or duplicate key)
+    const originalCreate = Campground.create;
+    Campground.create = jest.fn().mockRejectedValueOnce(new Error('Unexpected database error'));
+
+    const res = await request(app)
+      .post('/api/v1/campgrounds')
+      .set('Authorization', `Bearer ${token}`)
+      .send(validPayload);
+
+    expect(res.status).toBe(500);
+    expect(res.body.success).toBe(false);
+    expect(res.body.message).toBe('Server error');
+
+    // Restore original implementation
+    Campground.create = originalCreate;
+  });
+});

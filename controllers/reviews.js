@@ -84,13 +84,6 @@ exports.createReview = async (req, res) => {
       });
     }
 
-    //validation comment
-    if (!req.body.comment || req.body.comment.trim() === "") {
-      return res.status(400).json({ success: false, msg: "Please provide a comment" });
-    } else if (req.body.comment.length > 1000) {
-      return res.status(400).json({ success: false, msg: "Comment cannot exceed 1000 characters" });
-    }
-
     const review = await Review.create(req.body);
 
     // update campground rating stats

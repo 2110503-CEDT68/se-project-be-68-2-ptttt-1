@@ -18,6 +18,7 @@
     "start": "node server.js",
     "test": "jest --runInBand --forceExit",
     "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage --runInBand --forceExit",
     "dev": "nodemon server.js"
   },
   "jest": {
