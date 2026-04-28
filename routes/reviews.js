@@ -107,11 +107,17 @@ router.route("/").get(getReviews).post(protect, createReview);
  * @swagger
  * /api/v1/campgrounds/{campgroundId}/reviews/{id}:
  *   delete:
- *     summary: Delete a review by ID (review owner only)
+ *     summary: Delete a review (review owner only)
  *     description: |
  *       Only the user who created the review can delete it.
  *       **Admins cannot delete other users' reviews** via this endpoint.
- *       On successful deletion, campground rating stats (sumRating, countReview, ratingCount) are updated automatically.
+ *
+ *       ⚠️ **Note on campgroundId**: The `campgroundId` path parameter is part of the nested route
+ *       structure but is **not used by the delete controller**. The campground is resolved internally
+ *       from the review document. You may also call this via the direct path:
+ *       `DELETE /api/v1/reviews/{id}`
+ *
+ *       On successful deletion, campground rating stats (sumRating, countReview, ratingCount) are recalculated automatically.
  *     tags: [Reviews]
  *     security:
  *       - bearerAuth: []
@@ -122,13 +128,65 @@ router.route("/").get(getReviews).post(protect, createReview);
  *         required: true
  *         schema:
  *           type: string
+ *         description: Campground ID (part of nested route, not used by delete logic)
  *         example: 6634a1b2c3d4e5f6a7b8c9d0
  *       - in: path
  *         name: id
  *         required: true
  *         schema:
  *           type: string
- *         description: MongoDB ObjectId of the review
+ *         description: MongoDB ObjectId of the review to delete
+ *         example: 6634d1b2c3d4e5f6a7b8c9d3
+ *     responses:
+ *       200:
+ *         description: Review deleted and campground rating stats recalculated
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data: { type: object, example: {} }
+ *       401:
+ *         description: Not authenticated
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       403:
+ *         description: Not authorized — only the review owner can delete their review
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       404:
+ *         description: Review not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+
+/**
+ * @swagger
+ * /api/v1/reviews/{id}:
+ *   delete:
+ *     summary: Delete a review via direct path (review owner only)
+ *     description: |
+ *       Alternative direct path — equivalent to `DELETE /api/v1/campgrounds/{campgroundId}/reviews/{id}`.
+ *       The campground is resolved internally from the review record.
+ *       Only the review owner can delete; admins cannot delete others' reviews.
+ *     tags: [Reviews]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: MongoDB ObjectId of the review to delete
  *         example: 6634d1b2c3d4e5f6a7b8c9d3
  *     responses:
  *       200:
