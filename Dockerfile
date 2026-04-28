@@ -1,7 +1,7 @@
-FROM node:20-alpine
+FROM node:20-slim
 
 ENV NODE_ENV=production
-ENV PORT=5000
+ENV PORT=8000
 
 RUN mkdir -p /app && chown -R node:node /app
 
@@ -15,6 +15,6 @@ RUN npm ci --omit=dev
 
 COPY --chown=node:node . .
 
-EXPOSE 5000
+EXPOSE 8000
 
 CMD ["npm", "start"]
