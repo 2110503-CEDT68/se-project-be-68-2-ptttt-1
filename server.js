@@ -10,6 +10,8 @@ const helmet = require("helmet");
 const { xss } = require("express-xss-sanitizer");
 const rateLimit = require("express-rate-limit");
 const hpp = require("hpp");
+const swaggerUi = require('swagger-ui-express');
+const swaggerSpec = require('./config/swagger');
 
 // Load env vars
 dotenv.config({ path: "./config/config.env" });
@@ -36,7 +38,13 @@ app.use(mongoSanitize({ allowDots: true, patterns: [/\$[\w]+/g] }));
 // Cookie Parser
 app.use(cookieParser());
 
-// Set secutiry header
+// Swagger UI — API documentation (before helmet to avoid CSP blocking assets)
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+  customSiteTitle: 'Campground API Docs',
+  swaggerOptions: { persistAuthorization: true },
+}));
+
+// Set security headers
 app.use(helmet());
 
 // Prevent XSS attacks
