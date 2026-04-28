@@ -5,11 +5,13 @@ const helmet = require('helmet');
 const { xss } = require('express-xss-sanitizer');
 const rateLimit = require('express-rate-limit');
 const hpp = require('hpp');
+const swaggerUi = require('swagger-ui-express');
+const swaggerSpec = require('./config/swagger');
 
 const campgrounds = require('./routes/campgrounds');
 const auth = require('./routes/auth');
 const bookings = require('./routes/bookings');
-const reviews = require('./routes/reviews'); 
+const reviews = require('./routes/reviews');
 const app = express();
 
 app.set('query parser', 'extended');
@@ -17,8 +19,17 @@ app.set('query parser', 'extended');
 app.use(express.json());
 app.use(cookieParser());
 app.use(mongoSanitize({ allowDots: true, patterns: [/\$[\w]+/g] }));
-app.use(helmet());
 app.use(xss());
+
+// Swagger UI — API documentation (disabled in production via NODE_ENV)
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+  customSiteTitle: 'Campground API Docs',
+  swaggerOptions: {
+    persistAuthorization: true,
+  },
+}));
+
+app.use(helmet());
 
 const limiter = rateLimit({
   windowMs: 10 * 60 * 1000,
@@ -36,6 +47,6 @@ app.use(hpp());
 app.use('/api/v1/campgrounds', campgrounds);
 app.use('/api/v1/auth', auth);
 app.use('/api/v1/bookings', bookings);
-app.use('/api/v1/reviews', reviews); 
+app.use('/api/v1/reviews', reviews);
 
 module.exports = app;
